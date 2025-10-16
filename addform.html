@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<HTML>
+<head>
+    <title>ADD EMPLOYEE</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+    <link href='https://unpkg.com/boxicons@2.1.1/css/boxicons.min.css' rel='stylesheet'>
+    <script src="function.js"></script>    
+
+<script type="module">
+    import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getDatabase, ref, push, update, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+        //...
+    };
+
+    setLogLevel("debug");
+    let db, auth, userId, currentPegawaiId = null;
+
+    window.onload = async () => {
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        auth = getAuth(app);
+
+        try {
+            await signInAnonymously(auth);
+        } catch (error) {
+            console.error("Firebase Auth Error:", error);
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("Authenticated as:", userId);
+            }
+        });
+    };
+
+    // ===== FORM SUBMIT FUNCTION =====
+    window.submitForm = async (event) => {
+        event.preventDefault();
+
+        const name = document.getElementById('name').value;
+        const ic = document.getElementById('ic').value;
+        const email = document.getElementById('email').value;
+        const phone = document.getElementById('phone').value;
+        const unit = document.getElementById('unit').value;
+        const kini = document.getElementById('kini').value;
+        const depan = document.getElementById('depan').value;
+        const asal = document.getElementById('asal').value;
+
+        // Validate required fields
+        if (!name || !ic || !email || !phone || !unit || !kini || !depan || !asal) {
+            showMessage('Sila isikan semua maklumat.', 'text-red-500');
+            return;
+        }
+
+        // Handle optional photo
+        let photoBase64 = null;
+        const file = document.getElementById('photoInput').files[0];
+        if (file) {
+            photoBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Combine all data into one object
+        const formData = {
+            name,
+            ic,
+            email,
+            phone,
+            unit,
+            jawatan_kini: kini,
+            jawatan_datang: depan,
+            jawatan_asal: asal,
+            timestamp: new Date().toISOString(),
+        };
+
+        // Only add photo if it exists
+        if (photoBase64) {
+            formData.photoBase64 = photoBase64;
+        }
+
+        try {
+            // Save to Firebase
+            const newRef = await push(ref(db, "pegawai_data"), formData);
+            currentPegawaiId = newRef.key;
+
+            showMessage('✅ Data dan gambar berjaya disimpan!', 'text-green-500');
+            document.getElementById('pegawaiForm').reset();
+        } catch (error) {
+            console.error("Error saving to Firebase:", error);
+            showMessage('❌ Ralat semasa menyimpan data.', 'text-red-500');
+        }
+    };
+
+    window.showMessage = (message, colorClass) => {
+        const messageDiv = document.getElementById('message');
+        messageDiv.textContent = message;
+        messageDiv.className = `p-2 my-4 text-center rounded-lg ${colorClass}`;
+    };
+</script>
+
+</head>
+
+<body>
+    <div class="back-button">
+        <button onclick="back()" id="button"><i class='bx bx-undo'></i></button>
+    </div>
+
+    <div class="main-container">
+        <h1><u>++=</u> MAKLUMAT PEGAWAI <u>=++</u></h1>
+        <form id="pegawaiForm" onsubmit="submitForm(event)"  autocomplete="off">
+            <div class="placeholder-row">
+                <div class="left-container">
+                    <label for="name">NAMA:</label>
+                    <input type="text" id="name" name="name" required><br><br>
+                    <label for="ic">IC:</label>
+                    <input inputmode="numeric" pattern="[0-9]*" id="ic" name="ic" required><br><br>
+                    <label for="email">EMAIL:</label>
+                    <input type="email" id="email" name="email" required><br><br>
+                    <label for="phone">NOMBOR TELEFON:</label>
+                    <input type="tel" id="phone" name="phone" required><br><br>
+                    <label for="photoInput">GAMBAR:</label>
+                    <input style="width: 15vw;" type="file" id="photoInput" accept="image/*"><br><br><br><br>
+                </div>
+                <div class="right-container">
+                    <label for="unit">UNIT CAWANGAN:</label>
+                    <input type="text" id="unit" name="unit" required><br><br>
+                    <label for="kini">JAWATAN TERKINI:</label>
+                    <input type="text" id="kini" name="kini" required><br><br>
+                    <label for="depan">JAWATAN AKAN DATANG:</label>
+                    <input type="text" id="depan" name="depan" required><br><br>
+                    <label for="asal">JAWATAN ASAL:</label>
+                    <input type="text" id="asal" name="asal" required><br><br>
+                </div>
+            </div>
+            <br><br>
+            <button type="submit" style="position: fixed; bottom: 40px; width: 70vw;">Submit</button>
+        </form>
+        <!-- Message placeholder -->
+        <div id="message"></div>
+    </div>
+</body>
+</HTML>

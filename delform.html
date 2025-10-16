@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<HTML>
+<head>
+    <title>DELETE EMPLOYEE</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+    <link href='https://unpkg.com/boxicons@2.1.1/css/boxicons.min.css' rel='stylesheet'>
+    <script src="function.js"></script>    
+
+    <script type="module">
+        // window.onload = start;
+
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+       
+        const firebaseConfig = {
+            //...
+        };
+
+        // --- Firebase Initialization and Authentication ---
+        setLogLevel('debug');
+        let db, auth, userId;
+
+        window.onload = async () => {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            auth = getAuth(app);
+
+            // Sign in anonymously or with custom token
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+            }
+
+            // Listen for auth state changes
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("Authenticated with user ID:", userId);
+                    fetchAndRenderData(); 
+                } else {
+                    userId = crypto.randomUUID();
+                    console.log("Signed in anonymously with ID:", userId);
+                }
+            })
+        };
+
+        //ARRAY TO STORE SELECTED PEGAWAI
+        let selectedPegawai = [];
+
+        function togglePegawaiSelection(key, pegawai) {
+            const index = selectedPegawai.findIndex(p => p.key === key);
+
+            const row = document.querySelector(`tr[data-key="${key}"]`);
+
+            if (index >= 0) {
+                // Remove from selected
+                selectedPegawai.splice(index, 1);
+                row?.classList.remove("selected-row"); // remove highlight
+            } else {
+                // Add new selection
+                selectedPegawai.push({ key, ...pegawai });
+                row?.classList.add("selected-row"); // add highlight
+            }
+
+            renderSelectedPegawai();
+        }
+
+
+        function fetchAndRenderData() {
+            const row = document.createElement('tr');
+            const tableBody = document.getElementById('pegawai-table-body');
+            const dataRef = ref(db, `pegawai_data`);
+
+            onValue(dataRef, (snapshot) => {
+                const data = snapshot.val();
+                tableBody.innerHTML = '';
+
+                if (data) {
+                    for (const key in data) {
+                        const pegawai = data[key];
+                        const row = document.createElement('tr');
+                        row.setAttribute("data-key", key); // mark row with key
+                        row.innerHTML = `
+                            <td style="text-align: start; -webkit-user-select: none; -ms-user-select: none; user-select: none;">${pegawai.name || 'N/A'}</td>
+                            <td>${pegawai.unit || 'N/A'}</td>
+                        `;
+                        row.onclick = () => togglePegawaiSelection(key, pegawai);
+                        tableBody.appendChild(row);
+                    }
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="2">Tiada data pegawai.</td></tr>';
+                }
+            });
+        }
+
+        // Show selected pegawai in right panel
+        function renderSelectedPegawai() {
+            const container = document.querySelector('.selected-container');
+            if (selectedPegawai.length === 0) {
+                container.innerHTML = "<h3>Tiada pegawai dipilih.</h3>";
+                return;
+            }
+
+            container.innerHTML = selectedPegawai
+                .map(p => `<p><b>${p.name || 'N/A'}</b><br>(${p.unit || 'N/A'})</p>`)
+                .join("<br>");
+        }
+
+        // Delete pegawai by key
+        window.deleteSelectedPegawai = async () => {
+            if (selectedPegawai.length === 0) {
+                alert("Sila pilih pegawai dahulu!");
+                return;
+            }
+
+            try {
+                for (const pegawai of selectedPegawai) {
+                    await remove(ref(db, `pegawai_data/${pegawai.key}`));
+                }
+                alert("Semua maklumat pegawai berjaya dihapus!");
+
+                selectedPegawai = []; // Clear after deletion
+                renderSelectedPegawai();
+            } catch (err) {
+                console.error("Delete error:", err);
+                alert("Ralat semasa menghapus data.");
+            }
+        };
+
+        // Search filter
+        window.searchTable = () => {
+            const input = document.getElementById('search-input').value.toLowerCase();
+            const rows = document.getElementById('pegawai-table-body').getElementsByTagName('tr');
+
+            for (let i = 0; i < rows.length; i++) {
+                const nameCell = rows[i].getElementsByTagName('td')[0];
+                if (nameCell) {
+                    const textValue = nameCell.textContent || nameCell.innerText;
+                    rows[i].style.display = textValue.toLowerCase().includes(input) ? "" : "none";
+                }
+            }
+        };
+    </script>
+</head>
+
+<body>
+    <div class="back-button">
+        <button onclick="back()" id="button"><i class='bx bx-undo'></i></button>
+    </div>
+
+    <div class="main-container">
+        <h1><u>-- =</u> BUANG MAKLUMAT PEGAWAI <u>= --</u></h1>
+        <div class="placeholder-row" style="justify-content: flex-start;">
+            <div class="left-container" style="align-items: center;">
+                <input style="width: 90%; height: 35px; font-size: medium;" type="text" id="search-input" placeholder="Search..." onkeyup="searchTable()">
+                <br>       
+                <table style="width: 100%;">
+                    <thead>
+                        <th style="width: 800px;">NAMA</th>
+                        <th style="width: 500px;">UNIT CAWANGAN</th>
+                    </thead>
+                    <tbody id="pegawai-table-body" style="overflow-y: auto; max-height: 300px;">
+                        <!-- Data will be dynamically inserted here -->
+                    </tbody>
+                </table> 
+            </div>
+            <div class="right-container" style="align-items: center; width: 100%;">
+                <h1 style="margin: 0;"><u>SENARAI NAMA UNTUK DIHAPUS</u></h1>
+                <div class="selected-container">
+                    <h2>Sila Pilih Nama Pegawai Untuk Dihapus.</h2>
+                </div>
+                <br><br><br>
+                <button onclick="deleteSelectedPegawai()" style="position: fixed; width: 30%; bottom: 25px;">HAPUS</button>
+            </div>          
+        </div>
+    </div>
+</body>
+</HTML>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<HTML>
+<head>
+    <title>EMPLOYEE DETAILS</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+    <link href='https://unpkg.com/boxicons@2.1.1/css/boxicons.min.css' rel='stylesheet'>
+    <script src="function.js"></script>
+
+    <script type="module">
+        // window.onload = start;
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        // Firebase config
+        const firebaseConfig = {
+            //...
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const auth = getAuth(app);
+
+        // Get autoId from URL
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get("id");
+
+        // Authenticate user
+        window.onload = async () => {
+            try {
+                // ✅ Sign in anonymously before any database actions
+                await signInAnonymously(auth);
+                console.log("✅ Signed in anonymously");
+            } catch (err) {
+                console.error("❌ Auth error:", err);
+            }
+
+            // Wait until Firebase confirms authentication
+            onAuthStateChanged(auth, async (user) => {
+                if (!user) return;
+                console.log("Authenticated as:", user.uid);
+
+                if (!id) {
+                alert("ID tidak sah.");
+                return;
+                }
+
+                const pegawaiRef = ref(db, `pegawai_data/${id}`);
+                try {
+                const snapshot = await get(pegawaiRef);
+                if (!snapshot.exists()) {
+                    alert("Pegawai tidak dijumpai.");
+                    return;
+                }
+
+                const data = snapshot.val();
+                ["name", "ic", "email", "phone", "jawatan_asal", "jawatan_datang", "jawatan_kini", "unit"].forEach((field) => {
+                    document.getElementById(`pegawai-${field}`).textContent = data[field] || "-";
+                    document.getElementById(`edit-${field}`).value = data[field] || "";
+                });
+
+                // ✅ Handle photoBase64 if it exists
+                if (data.photoBase64) {
+                    const img = document.getElementById("photoBase64");
+                    img.src = "data:image/jpeg;base64," + data.photoBase64;
+                    img.style.display = "block";
+                } else {
+                    // fallback if no photo found
+                    const img = document.getElementById("photoBase64");
+                    img.src = "user.png";
+                    img.style.display = "block";
+                }
+                } catch (err) {
+                console.error("Error loading data:", err);
+                }
+            });
+        };
+
+        // ✅ Edit form handler
+        window.editForm = () => {
+        const fields = ["name", "ic", "email", "phone", "jawatan_asal", "jawatan_datang", "jawatan_kini", "unit"];
+
+        fields.forEach(f => {
+            document.getElementById(`pegawai-${f}`).style.display = "none";
+            document.getElementById(`edit-${f}`).style.display = "block";
+        });
+
+        // Show photo input if available
+        const photoInput = document.getElementById("photoInput");
+        if (photoInput) photoInput.style.display = "block";
+
+        document.getElementById("button-edit").style.display = "none";
+        document.getElementById("button-done").style.display = "block";
+        };
+
+        // ✅ Done (save changes)
+        window.doneEdit = async () => {
+            const fields = ["name", "ic", "email", "phone", "jawatan_asal", "jawatan_datang", "jawatan_kini", "unit"];
+            const updatedData = {};
+
+            fields.forEach(f => {
+                updatedData[f] = document.getElementById(`edit-${f}`).value;
+            });
+
+            // Optional: photo update
+            const file = document.getElementById('photoInput')?.files[0];
+            if (file) {
+                const reader = new FileReader();
+                updatedData.photoBase64 = await new Promise((resolve, reject) => {
+                reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+                });
+            }
+
+            const pegawaiRef = ref(db, `pegawai_data/${id}`);
+            try {
+                await update(pegawaiRef, updatedData);
+                alert("✅ Data updated successfully");
+
+                fields.forEach(f => {
+                document.getElementById(`pegawai-${f}`).textContent = updatedData[f];
+                document.getElementById(`pegawai-${f}`).style.display = "block";
+                document.getElementById(`edit-${f}`).style.display = "none";
+                });
+
+                if (document.getElementById("photoInput")) {
+                document.getElementById("photoInput").style.display = "none";
+                }
+
+                document.getElementById("button-edit").style.display = "block";
+                document.getElementById("button-done").style.display = "none";
+            } catch (err) {
+                console.error("Error updating:", err);
+                alert("❌ Failed to update data");
+            }
+
+            window.location.reload(); // Reload to reflect changes
+        };
+    </script>
+</head>
+
+<body>
+    <div class="back-button">
+        <button onclick="back()" id="button"><i class='bx bx-undo'></i></button>
+    </div>
+
+    <div class="main-container">
+        <div class="edit-button">
+            <button onclick="editForm()" id="button-edit"><i class='bx bx-edit'></i></button>
+            <button onclick="doneEdit()" id="button-done" style="display:none;">✅</button>
+        </div>
+
+        <br>
+        <h1><u>===</u> MAKLUMAT PEGAWAI <u>===</u></h1>
+
+        <div class="gambarpegawai">
+            <img id="photoBase64" src="./images/user.png" alt="Gambar Pegawai" style="width:100%;height:100%; display:none;">
+            <input type="file" id="photoInput" accept="image/*" style="display: none; z-index: 2; position: relative; width: 45%;">
+        </div>
+
+        <div class="placeholder-row">
+            <div class="left-container">
+                <p style="font-weight: bold;">NAMA:</p>
+                <p id="pegawai-name">-</p><br>
+                <input type="text" id="edit-name" class="edit-field" style="display:none"><br>
+
+                <p style="font-weight: bold;">MYKAD/IC:</p>
+                <p id="pegawai-ic">-</p><br>
+                <input type="text" id="edit-ic" class="edit-field" style="display:none"><br>
+
+                <p style="font-weight: bold;">EMAIL:</p>
+                <p id="pegawai-email">-</p><br>
+                <input type="text" id="edit-email" class="edit-field" style="display:none;"><br>
+
+                <p style="font-weight: bold;">NO. TELEFON:</p>
+                <p id="pegawai-phone">-</p><br>
+                <input type="text" id="edit-phone" class="edit-field" style="display:none;"><br>
+            </div>
+            <div class="right-container">
+                <p style="font-weight: bold;">UNIT CAWANGAN:</p>
+                <p id="pegawai-unit">-</p><br>
+                <input type="text" id="edit-unit" class="edit-field" style="display:none;"><br>
+
+                <p style="font-weight: bold;">JAWATAN TERKINI:</p>
+                <p id="pegawai-jawatan_kini">-</p><br>
+                <input type="text" id="edit-jawatan_kini" class="edit-field" style="display:none;"><br>
+
+                <p style="font-weight: bold;">JAWATAN AKAN DATANG:</p>
+                <p id="pegawai-jawatan_datang">-</p><br>
+                <input type="text" id="edit-jawatan_datang" class="edit-field" style="display:none;"><br>
+
+                <p style="font-weight: bold;">JAWATAN ASAL:</p>
+                <p id="pegawai-jawatan_asal">-</p><br>
+                <input type="text" id="edit-jawatan_asal" class="edit-field" style="display:none;"><br>
+            </div>
+        </div>
+    </div>
+</body>
+</HTML>
